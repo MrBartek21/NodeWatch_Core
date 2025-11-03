@@ -6,6 +6,9 @@ import tm1637
 import requests
 from config import CLK, DIO, DB_HOST, DB_USER, DB_PASS, DB_NAME, API_KEY, DISPLAY_INTERVAL
 from gpiozero import LED
+import psutil
+import platform
+import socket
 
 # === TM1637 setup ===
 tm = tm1637.TM1637(clk=CLK, dio=DIO)
@@ -34,7 +37,7 @@ def close_db(e=None):
 
 
 
-
+# === Funkcja do alertów===
 def emit_alert(node_id, message, level='info'):
     """Dodaj alert do bazy i emituj przez Socket.IO"""
     db = get_db()
@@ -70,6 +73,7 @@ def clear_alerts():
     db.commit()
     socketio.emit("alerts_cleared", {"hostname": hostname})  # powiadom front
     return jsonify({"message": f"Alerty {'dla ' + hostname if hostname else 'wszystkie'} zostały wyczyszczone"}), 200
+
 
 
 # === API do aktualizacji stanu węzłów ===
@@ -245,12 +249,9 @@ def delete_node():
     return jsonify({"message": f"Node '{hostname}' deleted successfully"}), 200
 
 
-
-
-API_KEY = "TwojSekretnyKlucz"  # używane do komunikacji z agentem
-
 @app.route("/api/container_action", methods=["POST"])
 def container_action_central():
+    API_KEY = "TwojSekretnyKlucz"  # używane do komunikacji z agentem
     data = request.json
     hostname = data.get("hostname")        # tu podajesz IP hosta
     container_name = data.get("container_name")
@@ -274,6 +275,55 @@ def container_action_central():
         return jsonify({"error": f"Nie udało się połączyć z agentem: {str(e)}"}), 500
 
 
+
+# === Funkcja zbierająca live dane systemowe ===
+def gather_host_data():
+    try:
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        memory_percent = memory.percent
+        disk = psutil.disk_usage('/')
+        disk_percent = disk.percent
+        uptime = int(time.time() - psutil.boot_time())
+        cpu_temp = None
+        try:
+            # odczyt temperatury w mC i konwersja na C
+            with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                cpu_temp = int(f.read().strip()) / 1000.0
+        except Exception as e:
+            print("Nie udało się odczytać temperatury CPU:", e)
+            cpu_temp = None
+        
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        except:
+            ip = "n/a"
+        finally:
+            s.close()
+
+        data = {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory_percent,
+            "disk_percent": disk_percent,
+            "ip": ip,
+            "uptime": uptime,
+            "cpu_temp": cpu_temp,
+            "hostname": platform.node(),
+            "os": platform.platform()
+        }
+        return data
+    except Exception as e:
+        print("Host data error:", e)
+        return {}
+
+# === Wątek emitujący dane live przez Socket.IO ===
+def live_host_thread():
+    while True:
+        data = gather_host_data()
+        socketio.emit('live_host_data', data, namespace='/')  # usuń broadcast
+        socketio.sleep(2)  # zamiast time.sleep
 
 
 
@@ -303,4 +353,5 @@ def dashboard():
 
 if __name__ == "__main__":
     threading.Thread(target=display_loop, daemon=True).start()
+    socketio.start_background_task(live_host_thread)
     socketio.run(app, host="0.0.0.0", port=8080)
