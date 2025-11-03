@@ -1,0 +1,4 @@
+Flask
+pymysql
+tm1637
+requests
