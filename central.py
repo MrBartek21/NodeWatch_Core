@@ -331,7 +331,7 @@ def live_host_thread():
 def display_loop():
     while True:
         try:
-            with app.app_context():  # <-- tutaj kontekst aplikacji
+            with app.app_context():
                 db = pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASS,
                                      database=DB_NAME, autocommit=True)
                 with db.cursor() as cursor:
@@ -339,11 +339,24 @@ def display_loop():
                     online_nodes = cursor.fetchone()[0]
                     cursor.execute("SELECT COUNT(*) FROM alerts")
                     alerts_count = cursor.fetchone()[0]
+                    cursor.execute("SELECT AVG(cpu_percent), AVG(memory_percent) FROM nodes")
+                    avg_cpu, avg_mem = cursor.fetchone()
                 db.close()
-                tm.numbers(online_nodes, alerts_count)
+
+                metrics = [
+                    (online_nodes % 100, alerts_count % 100),
+                    (int(avg_cpu or 0) % 100, int(avg_mem or 0) % 100),
+                ]
+
+                for num1, num2 in metrics:
+                    tm.numbers(num1, num2)
+                    time.sleep(DISPLAY_INTERVAL)
+
         except Exception as e:
             print("Display error:", e)
-        time.sleep(DISPLAY_INTERVAL)
+            time.sleep(DISPLAY_INTERVAL)
+
+
 
 
 # === Dashboard ===
