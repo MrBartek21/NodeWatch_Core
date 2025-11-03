@@ -5,13 +5,20 @@ import pymysql
 import tm1637
 import requests
 from config import CLK, DIO, DB_HOST, DB_USER, DB_PASS, DB_NAME, API_KEY, DISPLAY_INTERVAL
+from gpiozero import LED
 
 # === TM1637 setup ===
 tm = tm1637.TM1637(clk=CLK, dio=DIO)
 
+# === GPIO setup ===
+led_ok = LED(27)
+led_error = LED(17)
+
 # === Flask + SocketIO setup ===
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
+
 
 # === DB connection per request ===
 def get_db():
@@ -26,10 +33,44 @@ def close_db(e=None):
 
 
 
-from gpiozero import LED
-# --- GPIO setup ---
-led_ok = LED(27)
-led_error = LED(17)
+
+
+def emit_alert(node_id, message, level='info'):
+    """Dodaj alert do bazy i emituj przez Socket.IO"""
+    db = get_db()
+    with db.cursor() as cursor:
+        cursor.execute("INSERT INTO alerts (node_id, message, level, created_at) VALUES (%s,%s,%s,NOW())",
+                       (node_id, message, level))
+    db.commit()
+    socketio.emit('new_alert', {'node_id': node_id, 'message': message, 'level': level})
+
+
+# === API do czyszczenia alertów ===
+@app.route("/api/clear_alerts", methods=["POST"])
+def clear_alerts():
+    key = request.headers.get("X-API-KEY")
+    if key != API_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json or {}
+    hostname = data.get("hostname")  # jeśli podamy hostname, czyścimy tylko dla tego węzła
+
+    db = get_db()
+    with db.cursor() as cursor:
+        if hostname:
+            cursor.execute("SELECT id FROM nodes WHERE hostname=%s", (hostname,))
+            result = cursor.fetchone()
+            if not result:
+                return jsonify({"error": f"Node '{hostname}' not found"}), 404
+            node_id = result[0]
+            cursor.execute("DELETE FROM alerts WHERE node_id=%s", (node_id,))
+        else:
+            cursor.execute("DELETE FROM alerts")  # globalnie
+
+    db.commit()
+    socketio.emit("alerts_cleared", {"hostname": hostname})  # powiadom front
+    return jsonify({"message": f"Alerty {'dla ' + hostname if hostname else 'wszystkie'} zostały wyczyszczone"}), 200
+
 
 # === API do aktualizacji stanu węzłów ===
 @app.route("/api/update", methods=["POST"])
@@ -113,75 +154,6 @@ def update_node():
     return "OK", 200
 
 
-# === API do usuwania serwera ===
-@app.route("/api/delete_node", methods=["POST"])
-def delete_node():
-    """Usuwa serwer i wszystkie jego kontenery z bazy danych"""
-    key = request.headers.get("X-API-KEY")
-    if key != API_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    data = request.json
-    hostname = data.get("hostname")
-    if not hostname:
-        return jsonify({"error": "Missing hostname"}), 400
-
-    db = get_db()
-    with db.cursor() as cursor:
-        cursor.execute("SELECT id FROM nodes WHERE hostname=%s", (hostname,))
-        result = cursor.fetchone()
-        if not result:
-            return jsonify({"error": f"Node '{hostname}' not found"}), 404
-
-        node_id = result[0]
-        # Usuń powiązane usługi
-        cursor.execute("DELETE FROM services WHERE node_id=%s", (node_id,))
-        # Usuń sam węzeł
-        cursor.execute("DELETE FROM nodes WHERE id=%s", (node_id,))
-
-    db.commit()
-    socketio.emit("update_nodes")
-    return jsonify({"message": f"Node '{hostname}' deleted successfully"}), 200
-
-
-def emit_alert(node_id, message, level='info'):
-    """Dodaj alert do bazy i emituj przez Socket.IO"""
-    db = get_db()
-    with db.cursor() as cursor:
-        cursor.execute("INSERT INTO alerts (node_id, message, level, created_at) VALUES (%s,%s,%s,NOW())",
-                       (node_id, message, level))
-    db.commit()
-    socketio.emit('new_alert', {'node_id': node_id, 'message': message, 'level': level})
-
-# === API do czyszczenia alertów ===
-@app.route("/api/clear_alerts", methods=["POST"])
-def clear_alerts():
-    key = request.headers.get("X-API-KEY")
-    if key != API_KEY:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    data = request.json or {}
-    hostname = data.get("hostname")  # jeśli podamy hostname, czyścimy tylko dla tego węzła
-
-    db = get_db()
-    with db.cursor() as cursor:
-        if hostname:
-            cursor.execute("SELECT id FROM nodes WHERE hostname=%s", (hostname,))
-            result = cursor.fetchone()
-            if not result:
-                return jsonify({"error": f"Node '{hostname}' not found"}), 404
-            node_id = result[0]
-            cursor.execute("DELETE FROM alerts WHERE node_id=%s", (node_id,))
-        else:
-            cursor.execute("DELETE FROM alerts")  # globalnie
-
-    db.commit()
-    socketio.emit("alerts_cleared", {"hostname": hostname})  # powiadom front
-    return jsonify({"message": f"Alerty {'dla ' + hostname if hostname else 'wszystkie'} zostały wyczyszczone"}), 200
-
-
-
-
 @socketio.on('get_fullstatus')
 def handle_get_fullstatus():
     db = get_db()
@@ -242,34 +214,68 @@ def handle_get_fullstatus():
     emit('fullstatus', list(nodes.values()))
 
 
+# === API do usuwania serwera ===
+@app.route("/api/delete_node", methods=["POST"])
+def delete_node():
+    """Usuwa serwer i wszystkie jego kontenery z bazy danych"""
+    key = request.headers.get("X-API-KEY")
+    if key != API_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
 
-# === Restart kontenera przez SocketIO POST ===
-@app.route("/api/restart_container", methods=["POST"])
-def restart_container():
     data = request.json
     hostname = data.get("hostname")
-    container_name = data.get("container_name")
-
-    if not hostname or not container_name:
-        return jsonify({"error": "hostname i container_name wymagane"}), 400
+    if not hostname:
+        return jsonify({"error": "Missing hostname"}), 400
 
     db = get_db()
-    with db.cursor(pymysql.cursors.DictCursor) as cursor:
-        cursor.execute("SELECT hostname FROM nodes WHERE hostname=%s", (hostname,))
-        node = cursor.fetchone()
-        if not node:
-            return jsonify({"error": "Node nie znaleziony"}), 404
+    with db.cursor() as cursor:
+        cursor.execute("SELECT id FROM nodes WHERE hostname=%s", (hostname,))
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({"error": f"Node '{hostname}' not found"}), 404
 
+        node_id = result[0]
+        # Usuń powiązane usługi
+        cursor.execute("DELETE FROM services WHERE node_id=%s", (node_id,))
+        # Usuń sam węzeł
+        cursor.execute("DELETE FROM nodes WHERE id=%s", (node_id,))
+
+    db.commit()
+    socketio.emit("update_nodes")
+    return jsonify({"message": f"Node '{hostname}' deleted successfully"}), 200
+
+
+
+
+API_KEY = "TwojSekretnyKlucz"  # używane do komunikacji z agentem
+
+@app.route("/api/container_action", methods=["POST"])
+def container_action_central():
+    data = request.json
+    hostname = data.get("hostname")        # tu podajesz IP hosta
+    container_name = data.get("container_name")
+    action = data.get("action")
+
+    if not hostname or not container_name or not action:
+        return jsonify({"error": "hostname, container_name i action są wymagane"}), 400
+
+    agent_url = f"http://{hostname}:5000/api/container_action"
     try:
-        agent_url = f"http://{hostname}:5000/api/restart"
-        res = requests.post(agent_url, json={"container_name": container_name},
-                            headers={"X-API-KEY": API_KEY}, timeout=5)
+        res = requests.post(agent_url, json={
+            "container_name": container_name,
+            "action": action
+        }, headers={"X-API-KEY": API_KEY}, timeout=5)
+
         if res.status_code == 200:
-            return jsonify({"status":"ok","message":f"Kontener {container_name} restartowany"})
+            return jsonify(res.json())
         else:
-            return jsonify({"status":"fail","message":res.text}), 500
-    except Exception as e:
-        return jsonify({"status":"error","message":str(e)}), 500
+            return jsonify({"error": f"Agent zwrócił błąd: {res.text}"}), res.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Nie udało się połączyć z agentem: {str(e)}"}), 500
+
+
+
+
 
 # === TM1637 display thread ===
 def display_loop():
