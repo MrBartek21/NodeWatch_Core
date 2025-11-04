@@ -13,3 +13,8 @@ API_KEY = "TwojSekretnyKlucz"
 
 # Aktualizacja wyświetlacza co X sekund
 DISPLAY_INTERVAL = 5
+
+
+# Czas w sekundach, po którym host jest uznawany za offline
+NODE_OFFLINE_TIMEOUT = 120  # np. 2 minuty
+CHECK_INTERVAL = 10         # co ile sekund sprawdzamy statusy

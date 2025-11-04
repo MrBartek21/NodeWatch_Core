@@ -4,11 +4,13 @@ from flask_socketio import SocketIO, emit
 import pymysql
 import tm1637
 import requests
-from config import CLK, DIO, DB_HOST, DB_USER, DB_PASS, DB_NAME, API_KEY, DISPLAY_INTERVAL
+#from config import CLK, DIO, DB_HOST, DB_USER, DB_PASS, DB_NAME, API_KEY, DISPLAY_INTERVAL
+from config import *
 from gpiozero import LED
 import psutil
 import platform
 import socket
+from datetime import datetime
 
 # === TM1637 setup ===
 tm = tm1637.TM1637(clk=CLK, dio=DIO)
@@ -16,6 +18,7 @@ tm = tm1637.TM1637(clk=CLK, dio=DIO)
 # === GPIO setup ===
 led_ok = LED(27)
 led_error = LED(17)
+led = LED(6)
 
 # === Flask + SocketIO setup ===
 app = Flask(__name__)
@@ -37,15 +40,40 @@ def close_db(e=None):
 
 
 
-# === Funkcja do alertów===
+# === Funkcja do alertów ===
 def emit_alert(node_id, message, level='info'):
     """Dodaj alert do bazy i emituj przez Socket.IO"""
     db = get_db()
-    with db.cursor() as cursor:
-        cursor.execute("INSERT INTO alerts (node_id, message, level, created_at) VALUES (%s,%s,%s,NOW())",
-                       (node_id, message, level))
-    db.commit()
-    socketio.emit('new_alert', {'node_id': node_id, 'message': message, 'level': level})
+    cursor = db.cursor(pymysql.cursors.DictCursor)
+    try:
+        # Wstaw alert
+        cursor.execute("""
+            INSERT INTO alerts (node_id, message, level, created_at)
+            VALUES (%s, %s, %s, NOW())
+        """, (node_id, message, level))
+        db.commit()
+
+        # Pobierz dokładny timestamp z bazy
+        cursor.execute("SELECT created_at FROM alerts WHERE id = LAST_INSERT_ID()")
+        created_at = cursor.fetchone()['created_at'].strftime("%Y-%m-%d %H:%M:%S")
+
+        # Pobierz hostname dla node_id
+        cursor.execute("SELECT hostname FROM nodes WHERE id=%s", (node_id,))
+        hostname_row = cursor.fetchone()
+        hostname = hostname_row['hostname'] if hostname_row else 'unknown'
+
+        # Emituj event do wszystkich klientów
+        socketio.emit('new_alert', {
+            'node_id': node_id,
+            'hostname': hostname,
+            'message': message,
+            'level': level,
+            'created_at': created_at
+        })
+    finally:
+        cursor.close()
+
+
 
 
 # === API do czyszczenia alertów ===
@@ -90,6 +118,7 @@ def update_node():
     agent_hostname = data.get("agent_hostname")
     host_type = data.get("host_type")
     node_type = data.get("type")
+    agent_version = data.get("AGENT_VERSION")
     containers = data.get("containers", [])
     host_status = data.get("host_status", {}) or {}
 
@@ -113,36 +142,42 @@ def update_node():
                 UPDATE nodes SET 
                     type=%s, status='online', last_seen=NOW(),
                     cpu_percent=%s, memory_percent=%s, disk_percent=%s,
-                    uptime=%s, ip=%s, docker_version=%s, cpu_temp=%s, agent_hostname=%s, host_type=%s
+                    uptime=%s, ip=%s, docker_version=%s, cpu_temp=%s, agent_hostname=%s, host_type=%s, agent_version=%s
                 WHERE id=%s
             """, (node_type, cpu_percent, memory_percent, disk_percent,
-                  uptime, ip, docker_version, cpu_temp, agent_hostname, host_type, node_id))
+                  uptime, ip, docker_version, cpu_temp, agent_hostname, host_type, agent_version, node_id))
         else:
             cursor.execute("""
                 INSERT INTO nodes 
                     (hostname, type, status, last_seen,
                      cpu_percent, memory_percent, disk_percent,
-                     uptime, ip, docker_version, cpu_temp, agent_hostname, host_type)
-                VALUES (%s,%s,'online',NOW(),%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     uptime, ip, docker_version, cpu_temp, agent_hostname, host_type, agent_version)
+                VALUES (%s,%s,'online',NOW(),%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (hostname, node_type, cpu_percent, memory_percent, disk_percent,
-                  uptime, ip, docker_version, cpu_temp, agent_hostname, host_type))
+                  uptime, ip, docker_version, cpu_temp, agent_hostname, host_type, agent_version))
             node_id = cursor.lastrowid
 
             # --- Alerty hosta ---
         if cpu_percent and cpu_percent > 80:
-            emit_alert(node_id, f"CPU > 80% ({cpu_percent}%)")
+            emit_alert(node_id, f"CPU > 80% ({cpu_percent}%)", 'danger')
         if memory_percent and memory_percent > 85:
-            emit_alert(node_id, f"RAM > 85% ({memory_percent}%)")
+            emit_alert(node_id, f"RAM > 85% ({memory_percent}%)", 'danger')
         if disk_percent and disk_percent > 70:
-            emit_alert(node_id, f"Dysk > 70% ({disk_percent}%)")
+            emit_alert(node_id, f"Dysk > 70% ({disk_percent}%)", 'warning')
 
 
         # Usuń stare kontenery i wstaw aktualne
         cursor.execute("DELETE FROM services WHERE node_id=%s", (node_id,))
         for c in containers:
             # --- Alert kontenera tylko jeśli nie działa
-            #if c.get("status") != "running":
-            #    emit_alert(node_id, f"Kontener {c.get('name')} zatrzymany (status: {c.get('status')})")
+            if c.get("status") == "stopped":
+                emit_alert(node_id, f"Kontener {c.get('name')} zatrzymany (status: {c.get('status')})", 'danger')
+
+            if c.get("status") == "restarting":
+                emit_alert(node_id, f"Kontener {c.get('name')} restartuje się (status: {c.get('status')})", 'warning')
+
+            if c.get("status") == "created":
+                emit_alert(node_id, f"Kontener {c.get('name')} nie uruchomiony (status: {c.get('status')})", 'warning')
 
 
             ports = ",".join(c.get("ports", []))
@@ -171,6 +206,7 @@ def handle_get_fullstatus():
                 "hostname": node['hostname'],
                 "agent_hostname": node['agent_hostname'],
                 "host_type": node['host_type'],
+                "agent_version": node['agent_version'],
                 "type": node['type'],
                 "status": node.get('status', 'unknown'),
                 "last_seen": node['last_seen'].strftime("%Y-%m-%d %H:%M:%S") if node['last_seen'] else None,
@@ -332,32 +368,73 @@ def display_loop():
     while True:
         try:
             with app.app_context():
-                db = pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASS,
-                                     database=DB_NAME, autocommit=True)
+                db = pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, database=DB_NAME, autocommit=True)
                 with db.cursor() as cursor:
                     cursor.execute("SELECT COUNT(*) FROM nodes WHERE status='online'")
                     online_nodes = cursor.fetchone()[0]
                     cursor.execute("SELECT COUNT(*) FROM alerts")
                     alerts_count = cursor.fetchone()[0]
-                    cursor.execute("SELECT AVG(cpu_percent), AVG(memory_percent) FROM nodes")
-                    avg_cpu, avg_mem = cursor.fetchone()
                 db.close()
-
-                metrics = [
-                    (online_nodes % 100, alerts_count % 100),
-                    (int(avg_cpu or 0) % 100, int(avg_mem or 0) % 100),
-                ]
-
-                for num1, num2 in metrics:
-                    tm.numbers(num1, num2)
-                    time.sleep(DISPLAY_INTERVAL)
+                
+                tm.numbers(online_nodes % 100, alerts_count % 100)
+                time.sleep(DISPLAY_INTERVAL)
 
         except Exception as e:
             print("Display error:", e)
             time.sleep(DISPLAY_INTERVAL)
 
 
+def check_hardware():
+    while True:
+        try:
+            cpu = psutil.cpu_percent()
+            ram = psutil.virtual_memory().percent
+            disk = psutil.disk_usage("/").percent
 
+            # --- Diagnostyka hardware ---
+            if cpu > 90 or ram > 85 or disk > 80:
+                # Szybkie miganie – krytyczne
+                led.blink(on_time=0.2, off_time=0.2)
+            elif cpu > 80 or ram > 75 or disk > 70:
+                # Wolne miganie – ostrzeżenie
+                led.blink(on_time=0.6, off_time=0.6)
+            else:
+                # Stałe światło – wszystko OK
+                led.on()
+        except Exception as e:
+            print("LED hardware check error:", e)
+            led.off()
+        time.sleep(5)
+
+
+def offline_checker():
+    while True:
+        try:
+            with app.app_context():
+                db = pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASS, database=DB_NAME, autocommit=True)
+                with db.cursor() as cursor:
+                    # Pobierz wszystkie węzły
+                    cursor.execute("SELECT id, hostname, last_seen, status FROM nodes")
+                    nodes = cursor.fetchall()
+
+                    for node_id, hostname, last_seen, status in nodes:
+                        if last_seen is None:
+                            continue
+                        elapsed = (datetime.now() - last_seen).total_seconds()
+                        
+                        if elapsed > NODE_OFFLINE_TIMEOUT and status != 'offline':
+                            cursor.execute("UPDATE nodes SET status='offline' WHERE id=%s", (node_id,))
+                            emit_alert(node_id, f"Host {hostname} jest OFFLINE", level='danger')
+                        
+                        elif elapsed <= NODE_OFFLINE_TIMEOUT and status != 'online':
+                            cursor.execute("UPDATE nodes SET status='online' WHERE id=%s", (node_id,))
+                            emit_alert(node_id, f"Host {hostname} wrócił ONLINE", level='success')
+
+                db.close()
+        except Exception as e:
+            print("Offline checker error:", e)
+
+        socketio.sleep(CHECK_INTERVAL)  # <--- zamiast time.sleep()
 
 # === Dashboard ===
 @app.route("/dashboard.html")
@@ -366,5 +443,7 @@ def dashboard():
 
 if __name__ == "__main__":
     threading.Thread(target=display_loop, daemon=True).start()
+    threading.Thread(target=check_hardware, daemon=True).start()
+    socketio.start_background_task(offline_checker)
     socketio.start_background_task(live_host_thread)
     socketio.run(app, host="0.0.0.0", port=8080)
