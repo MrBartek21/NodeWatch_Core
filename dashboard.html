@@ -8,9 +8,10 @@
 		<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
 		<style>
 			body {
-				background-color: #f2f2f2;
-				color: #212529;
+				background-color: #121212;
+				color: #fff;
 				padding-top: 90px;
+				font-family: 'Segoe UI', sans-serif;
 			}
 
 			/* padding-top dla sticky navbar */
@@ -30,16 +31,6 @@
 				font-size: 0.75rem;
 			}
 
-			.modal-content {
-				background-color: #ffffff;
-				color: #212529;
-			}
-
-			.modal-header {
-				background-color: #007bff;
-				color: #fff;
-				font-weight: 600;
-			}
 
 			.container-icon {
 				font-size: 1.2rem;
@@ -76,44 +67,119 @@
 				min-width: 60px;
 			}
 
-			.navbar-brand {
-				font-weight: 700;
-			}
 
-			.navbar-icons i {
-				font-size: 1.3rem;
-				margin-left: 15px;
-				cursor: pointer;
-			}
-
-			.navbar-host {
-				font-size: 0.9rem;
-				color: #ddd;
-				margin-left: 10px;
-			}
 		</style>
 	</head>
 	<body class="p-4">
 
 
 		<!-- === Sticky Navbar === -->
-		<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top shadow">
-			<div class="container-fluid">
-				<a class="navbar-brand d-flex align-items-center" href="#">
-					<i class="bi bi-hdd-network me-2"></i> NodeWatch <span id="navbarHost" class="navbar-host">— ctl01</span>
-				</a>
-				<div class="collapse navbar-collapse justify-content-center">
-					<ul class="navbar-nav mb-2 mb-lg-0" id="navbarMetrics">
-						<!-- Tu będą dynamicznie dodawane live metryki -->
-					</ul>
+		<nav class="navbar fixed-top custom-navbar">
+			<div class="container-fluid d-flex align-items-center justify-content-between">
+
+				<!-- Lewa sekcja -->
+				<div class="d-flex align-items-center">
+					<i class="bi bi-hdd-network me-2 fs-4 text-primary"></i>
+					<span class="fw-semibold text-light fs-5">NodeWatch</span>
+					<span id="navbarHost" class="ms-2 text-muted small">ctl01</span>
 				</div>
-				<div class="d-flex navbar-icons align-items-center">
-					<i class="bi bi-bell" title="Alerty"></i>
-					<i class="bi bi-gear" title="Ustawienia"></i>
-					<i class="bi bi-info-circle" title="Info"></i>
+
+				<!-- Sekcja metryk -->
+				<div class="d-flex align-items-center gap-3" id="navbarMetrics">
+				<div class="metric">
+					<span class="label">CPU</span>
+					<div class="bar bg-primary-subtle"><div class="fill bg-primary" style="width:30%"></div></div>
+					<span class="value text-primary">30%</span>
 				</div>
+				<div class="metric">
+					<span class="label">RAM</span>
+					<div class="bar bg-success-subtle"><div class="fill bg-success" style="width:45%"></div></div>
+					<span class="value text-success">45%</span>
+				</div>
+				<div class="metric">
+					<span class="label">DYSK</span>
+					<div class="bar bg-info-subtle"><div class="fill bg-info" style="width:60%"></div></div>
+					<span class="value text-info">60%</span>
+				</div>
+				<div class="metric">
+					<span class="label">TEMP</span>
+					<div class="bar bg-warning-subtle"><div class="fill bg-warning" style="width:50%"></div></div>
+					<span class="value text-warning">50°C</span>
+				</div>
+				</div>
+
+				<!-- Prawa sekcja -->
+				<div class="d-flex align-items-center gap-3">
+					<i class="bi bi-bell-fill text-light fs-5 icon-hover" title="Alerty" data-bs-toggle="modal" data-bs-target="#modalAlerts"></i>
+					<i class="bi bi-gear-fill text-light fs-5 icon-hover" title="Ustawienia" data-bs-toggle="modal" data-bs-target="#modalSettings"></i>
+					<i class="bi bi-info-circle-fill text-light fs-5 icon-hover" title="Informacje" data-bs-toggle="modal" data-bs-target="#modalInfo"></i>
+				</div>
+
 			</div>
 		</nav>
+
+		<style>
+		.custom-navbar {
+		background: linear-gradient(90deg, #0d0d0f 0%, #111 100%);
+		border-bottom: 1px solid #222;
+		padding: 0.4rem 1rem;
+		box-shadow: 0 1px 10px rgba(0,0,0,0.6);
+		z-index: 9999;
+		}
+
+		.metric {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		}
+
+		.metric .label {
+		font-size: 0.75rem;
+		color: #aaa;
+		min-width: 35px;
+		text-align: right;
+		}
+
+		.metric .bar {
+		position: relative;
+		width: 70px;
+		height: 6px;
+		border-radius: 4px;
+		overflow: hidden;
+		background-color: #2a2a2a !important;
+		}
+
+		.metric .bar .fill {
+		height: 100%;
+		transition: width 0.4s ease;
+		}
+
+		.metric .value {
+		font-size: 0.75rem;
+		font-weight: 500;
+		min-width: 40px;
+		text-align: left;
+		}
+
+		.icon-hover {
+			cursor: pointer;
+			transition: color 0.2s ease, transform 0.2s ease;
+		}
+
+		.icon-hover:hover {
+			color: #0d6efd;
+			transform: scale(1.15);
+		}
+
+		.modal-content {
+			box-shadow: 0 0 30px rgba(0,0,0,0.8);
+		}
+
+		.form-control:focus, .form-select:focus {
+			border-color: #0d6efd;
+			box-shadow: 0 0 0 0.2rem rgba(13,110,253,.25);
+		}
+		</style>
 
 
 		<!-- === Główna zawartość === -->
@@ -137,7 +203,6 @@
 			</div>
 		</div>
 
-
 		<!-- Containers Modal -->
 		<div class="modal fade" id="containersModal" tabindex="-1" aria-hidden="true">
 			<div class="modal-dialog modal-dialog-centered modal-lg">
@@ -156,21 +221,92 @@
 		</div>
 
 
-		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-		<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
-
 		<!-- Toast container -->
-		<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+		<div class="position-fixed top-1 end-0 p-3" style="z-index: 5080;">
 			<div id="alertsContainer"></div>
 		</div>
 
-		<div class="d-flex justify-content-end mb-3">
-			<button class="btn btn-sm btn-outline-danger" onclick="clearAlerts()">
-				<i class="bi bi-trash"></i> Wyczyść alerty </button>
+		<!-- Modal: Alerty -->
+		<div class="modal fade" id="modalAlerts" tabindex="-1">
+			<div class="modal-dialog modal-dialog-centered modal-lg">
+				<div class="modal-content bg-dark text-light border-secondary">
+				<div class="modal-header border-secondary">
+					<h5 class="modal-title"><i class="bi bi-bell-fill me-2 text-warning"></i>Alerty systemowe</h5>
+					<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+				</div>
+				<div class="modal-body">
+
+					<div class="d-flex justify-content-end mb-3">
+						<button class="btn btn-sm btn-danger" onclick="clearAlerts()">
+						<i class="bi bi-trash"></i> Wyczyść alerty </button>
+					</div>
+
+					
+					<div id="alertsList" class="list-group list-group-flush">
+						<p class="text-muted mb-0" id="noAlerts">Brak aktywnych alertów.</p>
+					</div>
+				</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Modal: Ustawienia -->
+		<div class="modal fade" id="modalSettings" tabindex="-1">
+		<div class="modal-dialog modal-dialog-centered modal-lg">
+			<div class="modal-content bg-dark text-light border-secondary">
+			<div class="modal-header border-secondary">
+				<h5 class="modal-title"><i class="bi bi-gear-fill me-2 text-info"></i>Ustawienia systemu</h5>
+				<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+			</div>
+			<div class="modal-body">
+				<form class="row g-3">
+				<div class="col-md-6">
+					<label class="form-label">Interwał odświeżania (sekundy)</label>
+					<input type="number" class="form-control bg-secondary text-light border-0" value="2">
+				</div>
+				<div class="col-md-6">
+					<label class="form-label">Motyw</label>
+					<select class="form-select bg-secondary text-light border-0">
+					<option>Dark</option>
+					<option>Light</option>
+					</select>
+				</div>
+				</form>
+			</div>
+			<div class="modal-footer border-secondary">
+				<button class="btn btn-outline-light" data-bs-dismiss="modal">Anuluj</button>
+				<button class="btn btn-primary">Zapisz</button>
+			</div>
+			</div>
+		</div>
+		</div>
+
+		<!-- Modal: Informacje -->
+		<div class="modal fade" id="modalInfo" tabindex="-1">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content bg-dark text-light border-secondary">
+			<div class="modal-header border-secondary">
+				<h5 class="modal-title"><i class="bi bi-info-circle-fill me-2 text-primary"></i>Informacje o systemie</h5>
+				<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+			</div>
+			<div class="modal-body">
+				<p><strong>NodeWatch Agent</strong> — wersja 1.2.4</p>
+				<p>Monitorowanie hostów i kontenerów w czasie rzeczywistym.</p>
+				<p class="text-muted small mb-0">© 2025 PacynaIT</p>
+			</div>
+			<div class="modal-footer border-secondary">
+				<button class="btn btn-secondary" data-bs-dismiss="modal">Zamknij</button>
+			</div>
+			</div>
+		</div>
 		</div>
 
 
+
+
+
+		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+		<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 		<script>
 			var socket = io(); // połączenie Socket.IO
@@ -178,56 +314,97 @@
 
 
 		<script>
-			// Aktualizacja live host data w navbar
 			socket.on('live_host_data', data => {
-				// hostname po lewej
-				document.getElementById('navbarHost').innerText = `— ${data.hostname || 'n/a'}`;
-				// metryki pośrodku
-				const metricsContainer = document.getElementById('navbarMetrics');
-				metricsContainer.innerHTML = `
-      
-							<li class="nav-item mx-2">
-								<span class="text-primary">CPU: ${data.cpu_percent ?? 'n/a'}%</span>
-							</li>
-							<li class="nav-item mx-2">
-								<span class="text-success">RAM: ${data.memory_percent ?? 'n/a'}%</span>
-							</li>
-							<li class="nav-item mx-2">
-								<span class="text-info">Dysk: ${data.disk_percent ?? 'n/a'}%</span>
-							</li>
-							<li class="nav-item mx-2">
-								<span class="text-warning">Temp: ${data.cpu_temp ?? 'n/a'}°C</span>
-							</li>
-							<li class="nav-item mx-2">
-								<span class="text-secondary">IP: ${data.ip ?? 'n/a'}</span>
-							</li>
-    `;
+				document.getElementById('navbarHost').textContent = data.hostname || 'n/a';
+				
+				const metrics = [
+					{ key: 'cpu_percent', color: 'primary', label: 'CPU', suffix: '%' },
+					{ key: 'memory_percent', color: 'success', label: 'RAM', suffix: '%' },
+					{ key: 'disk_percent', color: 'info', label: 'DYSK', suffix: '%' },
+					{ key: 'cpu_temp', color: 'warning', label: 'TEMP', suffix: '°C' }
+				];
+
+				const container = document.getElementById('navbarMetrics');
+				container.innerHTML = metrics.map(m => {
+					const val = data[m.key] ?? 0;
+					const width = Math.min(val, 100);
+					return `
+					<div class="metric">
+						<span class="label">${m.label}</span>
+						<div class="bar bg-${m.color}-subtle">
+						<div class="fill bg-${m.color}" style="width:${width}%"></div>
+						</div>
+						<span class="value text-${m.color}">${val}${m.suffix}</span>
+					</div>
+					`;
+				}).join('');
 			});
 		</script>
 
 
 		<script>
 			socket.on("new_alert", function(alert) {
+
+				// === Toast ===
 				const container = document.getElementById("alertsContainer");
 				const toast = document.createElement("div");
-				toast.className = `toast align-items-center text-bg-${alert.level} border-0`;
+				toast.className = `toast align-items-center text-bg-${alert.level} border-0 m-2`;
 				toast.setAttribute("role", "alert");
 				toast.setAttribute("aria-live", "assertive");
 				toast.setAttribute("aria-atomic", "true");
 				toast.innerHTML = `
-          
-							<div class="d-flex">
-								<div class="toast-body">
-                  ${alert.message}
-              </div>
-								<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-							</div>`;
+					<div class="d-flex">
+						<div class="toast-body">
+							<strong>${alert.hostname}</strong>: ${alert.message}
+						</div>
+						<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+					</div>`;
 				container.appendChild(toast);
-				var bsToast = new bootstrap.Toast(toast, {
-					delay: 8000
-				});
-				bsToast.show();
+				new bootstrap.Toast(toast, { delay: 8000 }).show();
+
+				// === Modal lista alertów ===
+				const alertsList = document.getElementById("alertsList");
+				const noAlerts = document.getElementById("noAlerts");
+				if (noAlerts) noAlerts.remove();
+
+				const alertItem = document.createElement("div");
+
+				// Dobierz kolory tła i tekstu w zależności od poziomu alertu
+				let bgClass = "";
+				let textClass = "text-light";
+
+				switch (alert.level) {
+					case "info":
+						bgClass = "bg-primary text-light";
+						break;
+					case "warning":
+						bgClass = "bg-warning text-dark";
+						break;
+					case "error":
+					case "danger":
+						bgClass = "bg-danger text-light";
+						break;
+					case "success":
+						bgClass = "bg-success text-light";
+						break;
+					default:
+						bgClass = "bg-secondary text-light";
+						break;
+				}
+
+				// Utwórz element listy z dynamicznymi kolorami
+				alertItem.className = `list-group-item ${bgClass} border-0 rounded-2 shadow-sm mb-2`;
+				alertItem.innerHTML = `
+					<div class="d-flex justify-content-between align-items-center">
+						<span><strong>${alert.hostname}</strong>: ${alert.message}</span>
+						<small class="opacity-75">${alert.created_at}</small>
+					</div>
+				`;
+				
+				alertsList.prepend(alertItem); // najnowszy alert na górze
 			});
+
+
 			// Czyszczenie alertów
 			async function clearAlerts() {
 				if (!confirm("Czy na pewno chcesz wyczyścić wszystkie alerty?")) return;
@@ -249,32 +426,10 @@
 					alert(`Błąd: ${data.error || 'Nie udało się wyczyścić alertów.'}`);
 				}
 			}
-			// Jeśli chcesz, możesz też czyścić alerty tylko dla jednego hosta
-			async function clearHostAlerts(hostname) {
-				if (!confirm(`Czy na pewno chcesz wyczyścić alerty dla serwera ${hostname}?`)) return;
-				const res = await fetch('/api/clear_alerts', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'X-API-KEY': 'TwojSekretnyKlucz'
-					},
-					body: JSON.stringify({
-						hostname
-					})
-				});
-				const data = await res.json();
-				if (res.ok) {
-					alert(data.message || `Alerty dla ${hostname} zostały wyczyszczone.`);
-					socket.emit('get_fullstatus');
-				} else {
-					alert(`Błąd: ${data.error || 'Nie udało się wyczyścić alertów.'}`);
-				}
-			}
 		</script>
 
     
 		<script>
-			//const socket = io();
 			// Ikony typów kontenerów
 			function getContainerIcon(container) {
 				const name = container.name.toLowerCase();
@@ -349,82 +504,158 @@
 				// Kontenery ogólne
 				return 'bi-box-seam';
 			}
+			
 			// Renderowanie listy serwerów
 			function renderServers(data) {
 				const list = document.getElementById('serversList');
 				list.innerHTML = '';
+
+				// Wrapper dla siatki kafli
+				const grid = document.createElement('div');
+				grid.className = 'row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3';
+
 				data.forEach(node => {
-					const ip = node.host_info?.ip || 'n/a';
+					const ip = node.host_info?.ip || 'N/A';
+
 					const failedContainers = node.services.filter(s => s.status !== 'running').length;
 					const healthText = failedContainers === 0 ? 'OK' : `Problemy: ${failedContainers}`;
 					const healthClass = failedContainers === 0 ? 'text-success' : 'text-danger';
+
 					const typeIcon = node.type === 'VM' ? 'bi-cpu' : node.type === 'Docker Host' ? 'bi-hdd-stack' : 'bi-server';
+					const typeBadge = (() => {
+						switch (node.type) {
+							case 'VM':
+								return `<span class="badge bg-primary text-light ms-1">VM</span>`;
+							case 'Docker Host':
+								return `<span class="badge bg-info text-dark ms-1">Docker</span>`;
+							case 'Bare Metal':
+								return `<span class="badge bg-secondary text-light ms-1">Bare Metal</span>`;
+							case 'LXC':
+								return `<span class="badge bg-warning text-dark ms-1">LXC</span>`;
+							default:
+								return `<span class="badge bg-dark text-light ms-1">${node.type || 'Nieznany'}</span>`;
+						}
+					})();
+
+					// === Badge host_type ===
+					const hostTypeBadge = (() => {
+						switch (node.host_type) {
+							case 'NAS':
+								return `<span class="badge bg-info text-dark">NAS</span>`;
+							case 'NAS_MEDIA_GAMES':
+								return `<span class="badge bg-primary text-light">NAS + Media + Gry</span>`;
+							case 'GAMES':
+								return `<span class="badge bg-warning text-dark">Serwer Gier</span>`;
+							case 'MEDIA':
+								return `<span class="badge bg-success text-light">Serwer Mediów</span>`;
+							case 'BACKUP':
+								return `<span class="badge bg-secondary text-light">Backup</span>`;
+							case 'ALL_IN_ONE':
+								return `<span class="badge bg-danger text-light">Usługi / All-in-One</span>`;
+							case 'TEST':
+								return `<span class="badge bg-light text-dark">Testowy</span>`;
+							case 'DEV':
+								return `<span class="badge bg-primary-subtle text-dark">Dev</span>`;
+							case 'PROXY':
+								return `<span class="badge bg-warning-subtle text-dark">Proxy</span>`;
+							case 'MONITOR':
+								return `<span class="badge bg-success-subtle text-dark">Monitor</span>`;
+							default:
+								return `<span class="badge bg-secondary-subtle text-dark">${node.host_type || 'Nieznany'}</span>`;
+						}
+					})();
+
+
+					const statusBorderClass = node.status === 'online' ? 'border-success' : 'border-danger';
 					const statusClass = node.status === 'online' ? 'text-success' : 'text-danger';
+
 					const info = node.host_info || {};
-					const cpu = renderProgressBar('CPU', info.cpu_percent, 'primary');
-					const ram = renderProgressBar('RAM', info.memory_percent, 'success');
-					const temp = renderProgressBar('Temp', info.cpu_temp, 'warning');
-					const disk = renderProgressBar('Dysk', info.disk_percent, 'info');
-					const li = document.createElement('li');
-					li.className = 'list-group-item';
-					li.innerHTML = `
-      
-							<div class="d-flex align-items-center justify-content-between">
-								<div class="d-flex align-items-center gap-3">
-									<i class="bi ${typeIcon} fs-4 text-secondary"></i>
-									<div>
-										<div class="d-flex align-items-center gap-2 flex-wrap">
-											<strong>${node.agent_hostname}</strong>
-											<span class="text-muted">| ${node.hostname}</span>
-											<span class="badge bg-light text-dark small">${node.type}</span>
-              ${node.host_type ? `
-											<span class="badge bg-secondary text-white small">${node.host_type}</span>` : ''}
-            
-										</div>
-										<div class="text-muted small">IP: ${ip}</div>
-										<div class="health-status ${healthClass}">${healthText}</div>
-									</div>
-									<div class="${statusClass} fw-semibold">${node.status}</div>
+
+					const cpu = renderProgressBar('CPU', info.cpu_percent, 'primary', '%');
+					const ram = renderProgressBar('RAM', info.memory_percent, 'success', '%');
+					const temp = renderProgressBar('Temp', info.cpu_temp, 'warning', '°C');
+					const disk = renderProgressBar('Dysk', info.disk_percent, 'info', '%');
+
+					const col = document.createElement('div');
+					col.className = 'col';
+
+					col.innerHTML = `
+						<div class="card text-light bg-dark h-100 shadow-sm ${statusBorderClass}">
+
+							<div class="card-header d-flex justify-content-between align-items-center">
+								<div>
+									<i class="bi ${typeIcon} fs-4 me-2"></i>
+									<strong>${node.agent_hostname}</strong> | ${node.hostname} ${typeBadge}
 								</div>
-								<div class="d-flex align-items-center gap-2">
-									<small class="text-muted me-2">Ost. aktualizacja: ${node.last_seen || 'n/a'}</small>
-									<button class="btn btn-sm btn-secondary" onclick='showServerInfoModal(${JSON.stringify(node).replace(/"/g, '&quot;')})'>
-										<i class="bi bi-info-circle"></i> Host
-          
-									</button>
-									<button class="btn btn-sm btn-info" onclick='showContainersModal(${JSON.stringify(node.services).replace(/"/g, '&quot;')}, "${node.hostname}", "${ip}")'>
-										<i class="bi bi-list"></i> Kontenery
-          
-									</button>
-									<button class="btn btn-sm btn-danger" onclick="deleteNode('${node.hostname}')">
-										<i class="bi bi-trash"></i>
-									</button>
+								<div class="${statusClass} fw-semibold">${node.status.toUpperCase()}</div>
+							</div>
+
+							<div class="card-header d-flex justify-content-between align-items-center">
+								<div>
+									<div class="ms-1 text-secondary small">IP: ${ip}</div>
+								</div>
+								<div class="text-secondary small">
+									${node.agent_version}
 								</div>
 							</div>
-							<div class="metrics-row">
-        ${cpu}
-        ${ram}
-        ${temp}
-        ${disk}
-      </div>
-    `;
-					list.appendChild(li);
+
+							<div class="card-body">
+								
+								<div class="mb-2 health-status ${healthClass}">${healthText}</div>
+								<div class="metrics-row mb-3">
+									${cpu}
+									${ram}
+									${temp}
+									${disk}
+								</div>
+								<div class="d-flex w-100">
+									<button class="btn btn-sm btn-secondary flex-fill rounded-2 m-2 p-2" 
+										onclick='showServerInfoModal(${JSON.stringify(node).replace(/"/g, '&quot;')})'>
+										<i class="bi bi-info-circle"></i> Host
+									</button>
+
+									<button class="btn btn-sm btn-info flex-fill rounded-2 m-2 p-2" 
+										onclick='showContainersModal(${JSON.stringify(node.services).replace(/"/g, '&quot;')}, "${node.hostname}", "${ip}")'>
+										<i class="bi bi-list"></i> Kontenery
+									</button>
+
+									<button class="btn btn-sm btn-danger flex-fill rounded-2 m-2 p-2" 
+										onclick="deleteNode('${node.hostname}')">
+										<i class="bi bi-trash"></i> Usuń
+									</button>
+								</div>
+
+							</div>
+							<div class="card-footer d-flex justify-content-between align-items-center text-secondary small">
+								<div>${hostTypeBadge}</div>
+								<div class="text-secondary">Raport: ${node.last_seen || 'N/A'}</div>
+							</div>
+
+						</div>
+					`;
+
+					grid.appendChild(col);
 				});
+
+				list.appendChild(grid);
 			}
+
+			
+			
 			// Funkcja renderująca paski obciążenia
-			function renderProgressBar(label, value, colorClass) {
+			function renderProgressBar(label, value, colorClass, unit) {
 				if (value == null) return '';
 				const safeValue = Math.min(Math.max(value, 0), 100);
 				return `
-    
-							<div>
-								<div class="metric-label">${label}: ${safeValue}%</div>
-								<div class="progress">
-									<div class="progress-bar bg-${colorClass}" role="progressbar" style="width: ${safeValue}%"></div>
-								</div>
-							</div>
-  `;
+					<div>
+						<div class="metric-label">${label}: ${safeValue}${unit}</div>
+						<div class="progress">
+							<div class="progress-bar bg-${colorClass}" role="progressbar" style="width: ${safeValue}%"></div>
+						</div>
+					</div>
+  					`;
 			}
+
 			// Modal — info o hoście z paskami obciążenia
 			function showServerInfoModal(node) {
 				const info = node.host_info || {};
